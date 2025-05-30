@@ -1,0 +1,187 @@
+#!/bin/bash
+
+# ======================================================
+# ╔═╗╔═╗╔╦╗╔═╗  ╔╗ ╔═╗╔═╗╔═╗  ╔═╗╔═╗╔╗╔╔═╗╦═╗╔═╗╔╦╗╔═╗╦═╗
+# ║  ║ ║ ║║║╣   ╠╩╗╠═╣╚═╗║╣   ║ ╦║╣ ║║║║╣ ╠╦╝╠═╣ ║ ║ ║╠╦╝
+# ╚═╝╚═╝═╩╝╚═╝  ╚═╝╩ ╩╚═╝╚═╝  ╚═╝╚═╝╝╚╝╚═╝╩╚═╩ ╩ ╩ ╚═╝╩╚═
+# ======================================================
+#
+# Application en ligne de commande pour copier le contenu de fichiers dans un fichier Markdown
+# 
+# Usage: 
+#   bash files-to-markdown.sh [fichier_liste]
+# 
+# Options:
+#   [fichier_liste]    Fichier texte contenant la liste des fichiers (un par ligne)
+#
+# Si aucun fichier liste n'est fourni, il sera demandé à l'utilisateur de saisir la liste.
+# Le fichier de sortie sera toujours codebase.md
+
+# Couleurs et styles
+BOLD="\033[1m"
+RESET="\033[0m"
+GREEN="\033[32m"
+RED="\033[31m"
+BLUE="\033[34m"
+YELLOW="\033[33m"
+CYAN="\033[36m"
+
+# Définir le fichier de sortie fixe
+OUTPUT_FILE="codebase.md"
+
+# Fonction pour afficher le titre/bannière
+show_banner() {
+    clear
+    echo -e "${CYAN}${BOLD}"
+    echo "╔═══════════════════════════════════════════════════════════════╗"
+    echo "║                     CODE BASE GENERATOR                       ║"
+    echo "╚═══════════════════════════════════════════════════════════════╝"
+    echo -e "${RESET}"
+    echo -e "${YELLOW}Convertit une liste de fichiers en un document Markdown structuré${RESET}"
+    echo
+}
+
+# Fonction pour afficher un message d'information
+info_message() {
+    echo -e "${BLUE}[INFO]${RESET} $1"
+}
+
+# Fonction pour afficher un message de succès
+success_message() {
+    echo -e "${GREEN}[SUCCÈS]${RESET} $1"
+}
+
+# Fonction pour afficher un message d'erreur
+error_message() {
+    echo -e "${RED}[ERREUR]${RESET} $1"
+}
+
+# Fonction pour lire l'entrée multi-lignes avec double Entrée pour terminer
+read_multiline() {
+    local content=""
+    local line=""
+    local previous=""
+    
+    # Lire les lignes une par une
+    while IFS= read -r line; do
+        # Si on reçoit une ligne vide après une ligne non-vide, on sort
+        if [ -z "$line" ] && [ ! -z "$previous" ]; then
+            break
+        fi
+        
+        # Ajouter la ligne au contenu uniquement si elle n'est pas vide
+        if [ ! -z "$line" ]; then
+            if [ -z "$content" ]; then
+                content="$line"
+            else
+                content="$content
+$line"
+            fi
+        fi
+        
+        previous="$line"
+    done
+    
+    echo "$content"
+}
+
+# Fonction pour traiter les fichiers et générer le Markdown
+process_files() {
+    local file_list="$1"
+    
+    # Vérifier si la liste est vide
+    if [ -z "$file_list" ]; then
+        error_message "Aucun fichier spécifié."
+        exit 1
+    fi
+    
+    # Initialiser le contenu Markdown
+    echo "# Contenu des fichiers" > "$OUTPUT_FILE"
+    echo "" >> "$OUTPUT_FILE"
+    
+    # Compteurs pour le résumé
+    success_count=0
+    failed_count=0
+    
+    # Convertir la liste de fichiers en tableau
+    IFS=$'\n' read -d '' -r -a files <<< "$file_list"
+    
+    # Parcourir chaque fichier
+    echo
+    info_message "Traitement des fichiers en cours..."
+    echo
+    
+    for file in "${files[@]}"; do
+        # Ignorer les lignes vides
+        if [ -z "$file" ]; then
+            continue
+        fi
+        
+        # Vérifier si le fichier existe et est lisible
+        if [ -f "$file" ] && [ -r "$file" ]; then
+            # Obtenir l'extension du fichier
+            extension="${file##*.}"
+            
+            # Ajouter le titre (chemin du fichier)
+            echo "## $file" >> "$OUTPUT_FILE"
+            echo "" >> "$OUTPUT_FILE"
+            
+            # Ajouter le bloc de code avec l'extension appropriée
+            echo "\`\`\`$extension" >> "$OUTPUT_FILE"
+            cat "$file" >> "$OUTPUT_FILE"
+            echo "" >> "$OUTPUT_FILE"  # Ajouter une ligne vide pour s'assurer que la fin du bloc est sur une nouvelle ligne
+            echo "\`\`\`" >> "$OUTPUT_FILE"
+            echo "" >> "$OUTPUT_FILE"
+            
+            echo -e "  ${GREEN}✓${RESET} Fichier ajouté: ${BOLD}$file${RESET}"
+            ((success_count++))
+        else
+            echo -e "  ${RED}✗${RESET} Impossible de lire le fichier: ${BOLD}$file${RESET}"
+            ((failed_count++))
+        fi
+    done
+    
+    # Afficher le résumé
+    echo
+    echo -e "${BOLD}${CYAN}Résumé:${RESET}"
+    echo -e "  ${GREEN}✓${RESET} Fichiers traités avec succès: ${BOLD}$success_count${RESET}"
+    echo -e "  ${RED}✗${RESET} Fichiers non traités: ${BOLD}$failed_count${RESET}"
+    echo -e "  ${BLUE}ℹ${RESET} Fichier Markdown généré: ${BOLD}$OUTPUT_FILE${RESET}"
+    
+    if [ $success_count -gt 0 ]; then
+        success_message "Génération terminée!"
+    else
+        error_message "Aucun fichier n'a été traité avec succès."
+    fi
+}
+
+# Afficher la bannière
+show_banner
+
+# Vérifier si un fichier liste a été fourni en paramètre
+if [ $# -eq 1 ]; then
+    LIST_FILE="$1"
+    
+    # Vérifier si le fichier existe et est lisible
+    if [ -f "$LIST_FILE" ] && [ -r "$LIST_FILE" ]; then
+        info_message "Lecture de la liste de fichiers depuis: ${BOLD}$LIST_FILE${RESET}"
+        file_list=$(cat "$LIST_FILE")
+        # Filtrer les lignes vides
+        file_list=$(echo "$file_list" | grep -v "^$")
+    else
+        error_message "Impossible de lire le fichier liste: ${BOLD}$LIST_FILE${RESET}"
+        exit 1
+    fi
+else
+    # Afficher les instructions avant de demander la saisie
+    echo -e "${YELLOW}Entrez les chemins des fichiers (un par ligne)${RESET}"
+    echo -e "${YELLOW}Appuyez sur Entrée deux fois pour terminer la saisie${RESET}"
+    echo
+    
+    # Demander à l'utilisateur de saisir la liste des fichiers
+    # (sans afficher à nouveau les instructions dans la fonction)
+    file_list=$(read_multiline)
+fi
+
+# Traiter les fichiers
+process_files "$file_list"
